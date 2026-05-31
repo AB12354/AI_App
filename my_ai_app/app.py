@@ -227,22 +227,44 @@ GDRIVE_FILE_ID = "1oqB258rpQZGydhLJXtQpErYY5o9irBbg"
 
 def download_models_from_drive():
     models_dir = os.path.join(BASE_DIR, "models")
-    if os.path.exists(models_dir) and len(os.listdir(models_dir)) > 0:
-        return  # already downloaded, skip
+    os.makedirs(models_dir, exist_ok=True)
+    
+    # Skip if already downloaded
+    if len(os.listdir(models_dir)) > 5:
+        return
+
+    zip_path = os.path.join(BASE_DIR, "models.zip")
+    
     try:
-        import gdown, zipfile, inspect
-        os.makedirs(models_dir, exist_ok=True)
-        zip_path = os.path.join(BASE_DIR, "models.zip")
-        url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
-        dl_kwargs = {"quiet": False, "resume": True}
-        if "fuzzy" in inspect.signature(gdown.download).parameters:
-            dl_kwargs["fuzzy"] = True
-        gdown.download(url, zip_path, **dl_kwargs)
-        with zipfile.ZipFile(zip_path, "r") as z:
+        import gdown
+        st.info("Downloading models from Google Drive... (this may take 1-2 mins)")
+        
+        # Use fuzzy=True to handle Drive's virus scan redirect
+        gdown.download(
+            id=GDRIVE_FILE_ID,
+            output=zip_path,
+            quiet=False,
+            fuzzy=True
+        )
+        
+        if not os.path.exists(zip_path) or os.path.getsize(zip_path) < 1000:
+            st.error("Download failed — file too small or missing")
+            return
+            
+        st.info(f"Downloaded {round(os.path.getsize(zip_path)/1e6, 1)} MB. Extracting...")
+        
+        import zipfile
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            # Check zip contents
+            names = z.namelist()
+            st.write("Zip contents:", names[:5])  # show first 5 files
             z.extractall(BASE_DIR)
+            
         os.remove(zip_path)
+        st.success(f"Models extracted! Files: {os.listdir(models_dir)[:5]}")
+        
     except Exception as e:
-        st.warning(f"Model download failed: {e}")
+        st.error(f"Download error: {e}")
 
 # ── Model Loading ─────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
