@@ -12,6 +12,9 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 import nltk
 nltk.download('stopwords', quiet=True)
 
+# ── Base directory (fixes chart/CSV paths on Streamlit Cloud) ─────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 st.set_page_config(
     page_title="VeritasAI - Fake News Detector",
     page_icon="🔍",
@@ -217,9 +220,30 @@ def handcrafted_features(texts):
         feats.append([length, punct_ratio, unique_ratio])
     return np.array(feats)
 
+
+
+# ── Model Download from Google Drive ──────────────────────────────────────────
+GDRIVE_FILE_ID = "1WvvfllhjnUMgreoGiGuiY3hzECYNa2g-"
+
+def download_models_from_drive():
+    if os.path.exists("models") and len(os.listdir("models")) > 0:
+        return  # already downloaded, skip
+    try:
+        import gdown, zipfile
+        os.makedirs("models", exist_ok=True)
+        zip_path = "models.zip"
+        url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
+        gdown.download(url, zip_path, quiet=False, fuzzy=True)
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            z.extractall(".")
+        os.remove(zip_path)
+    except Exception as e:
+        st.warning(f"Model download failed: {e}")
+
 # ── Model Loading ─────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_all_models():
+    download_models_from_drive()
     base = 'models'
     loaded = {}
     errors = []
@@ -238,6 +262,7 @@ def load_all_models():
             try:    loaded[ds][key] = joblib.load(p) if os.path.exists(p) else None
             except: loaded[ds][key] = None
     return loaded, errors
+
 
 # ── Prediction ────────────────────────────────────────────────────────────────
 def predict_dataset(text, ds, models, selected_models=None):
@@ -675,13 +700,13 @@ with tab2:
     st.markdown(lbl("EDA — Class Distribution & Article Length"), unsafe_allow_html=True)
     eda_c1, eda_c2 = st.columns(2, gap="large")
     with eda_c1:
-        p = os.path.join('charts', 'eda_class_distribution.png')
+        p = os.path.join(BASE_DIR, 'charts', 'eda_class_distribution.png')
         if os.path.exists(p):
             st.image(p, use_container_width=True)
         else:
             st.info("eda_class_distribution.png not found in charts/")
     with eda_c2:
-        p = os.path.join('charts', 'eda_length_distribution.png')
+        p = os.path.join(BASE_DIR, 'charts', 'eda_length_distribution.png')
         if os.path.exists(p):
             st.image(p, use_container_width=True)
         else:
@@ -691,7 +716,7 @@ with tab2:
 
     # ── FIX 2: Corrected label — 8 Datasets × 4 Models (32 Runs) ─────────────
     st.markdown(lbl("Performance Heatmaps — 8 Datasets × 4 Models (32 Runs)"), unsafe_allow_html=True)
-    hp = os.path.join('charts', 'heatmaps_accuracy_f1.png')
+    hp = os.path.join(BASE_DIR, 'charts', 'heatmaps_accuracy_f1.png')
     if os.path.exists(hp):
         st.image(hp, use_container_width=True)
     else:
@@ -700,11 +725,11 @@ with tab2:
     cc1, cc2 = st.columns(2, gap="large")
     with cc1:
         st.markdown(lbl("Cross-Dataset Performance"), unsafe_allow_html=True)
-        p = os.path.join('charts', 'cross_dataset_performance.png')
+        p = os.path.join(BASE_DIR, 'charts', 'cross_dataset_performance.png')
         if os.path.exists(p): st.image(p, use_container_width=True)
     with cc2:
         st.markdown(lbl("Training Time"), unsafe_allow_html=True)
-        p = os.path.join('charts', 'training_time_comparison.png')
+        p = os.path.join(BASE_DIR, 'charts', 'training_time_comparison.png')
         if os.path.exists(p): st.image(p, use_container_width=True)
 
     for lbl_txt, fname in [
@@ -712,12 +737,12 @@ with tab2:
         ("ROC Curves",         "roc_curves_all.png"),
     ]:
         st.markdown(lbl(lbl_txt), unsafe_allow_html=True)
-        p = os.path.join('charts', fname)
+        p = os.path.join(BASE_DIR, 'charts', fname)
         if os.path.exists(p): st.image(p, use_container_width=True)
 
 # ════════ TAB 3 — RESULTS ════════════════════════════════════════════════════
 with tab3:
-    csv_path = 'master_results.csv'
+    csv_path = os.path.join(BASE_DIR, 'master_results.csv')
     if os.path.exists(csv_path):
         df = pd.read_csv(csv_path)
         acc_vals = pd.to_numeric(df['Accuracy'], errors='coerce')
