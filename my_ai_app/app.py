@@ -234,7 +234,7 @@ def download_models_from_drive():
         os.makedirs(models_dir, exist_ok=True)
         zip_path = os.path.join(BASE_DIR, "models.zip")
         url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
-        dl_kwargs = {"quiet": False}
+        dl_kwargs = {"quiet": False, "resume": True}
         if "fuzzy" in inspect.signature(gdown.download).parameters:
             dl_kwargs["fuzzy"] = True
         gdown.download(url, zip_path, **dl_kwargs)
