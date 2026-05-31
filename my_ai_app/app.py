@@ -11,7 +11,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import nltk
 nltk.download('stopwords', quiet=True)
-
+st.cache_resource.clear()
 # ── Base directory (fixes chart/CSV paths on Streamlit Cloud) ─────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -222,54 +222,10 @@ def handcrafted_features(texts):
 
 
 
-# ── Model Download from Google Drive ──────────────────────────────────────────
-GDRIVE_FILE_ID = "1oqB258rpQZGydhLJXtQpErYY5o9irBbg"
-
-def download_models_from_drive():
-    models_dir = os.path.join(BASE_DIR, "models")
-    os.makedirs(models_dir, exist_ok=True)
-    
-    # Skip if already downloaded
-    if len(os.listdir(models_dir)) > 5:
-        return
-
-    zip_path = os.path.join(BASE_DIR, "models.zip")
-    
-    try:
-        import gdown
-        st.info("Downloading models from Google Drive... (this may take 1-2 mins)")
-        
-        # Use fuzzy=True to handle Drive's virus scan redirect
-        gdown.download(
-            id=GDRIVE_FILE_ID,
-            output=zip_path,
-            quiet=False,
-            fuzzy=True
-        )
-        
-        if not os.path.exists(zip_path) or os.path.getsize(zip_path) < 1000:
-            st.error("Download failed — file too small or missing")
-            return
-            
-        st.info(f"Downloaded {round(os.path.getsize(zip_path)/1e6, 1)} MB. Extracting...")
-        
-        import zipfile
-        with zipfile.ZipFile(zip_path, 'r') as z:
-            # Check zip contents
-            names = z.namelist()
-            st.write("Zip contents:", names[:5])  # show first 5 files
-            z.extractall(BASE_DIR)
-            
-        os.remove(zip_path)
-        st.success(f"Models extracted! Files: {os.listdir(models_dir)[:5]}")
-        
-    except Exception as e:
-        st.error(f"Download error: {e}")
 
 # ── Model Loading ─────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_all_models():
-    download_models_from_drive()
     base = os.path.join(BASE_DIR, 'models')
     loaded = {}
     errors = []
@@ -289,7 +245,7 @@ def load_all_models():
             except: loaded[ds][key] = None
     return loaded, errors
 
-
+    
 # ── Prediction ────────────────────────────────────────────────────────────────
 def predict_dataset(text, ds, models, selected_models=None):
     if selected_models is None:
@@ -336,26 +292,11 @@ def predict_dataset(text, ds, models, selected_models=None):
 # ── Load ──────────────────────────────────────────────────────────────────────
 with st.spinner('Initializing VeritasAI...'):
     all_models, load_errors = load_all_models()
-    
-# TEMPORARY DEBUG — remove after fixing
-import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-models_dir = os.path.join(BASE_DIR, 'models')
 
-st.write("### Debug Info")
-st.write("BASE_DIR:", BASE_DIR)
-st.write("models_dir exists:", os.path.exists(models_dir))
-if os.path.exists(models_dir):
-    files_found = os.listdir(models_dir)
-    st.write("Files in models/:", files_found)
-else:
-    st.write("❌ models/ folder does not exist")
-st.write("load_errors:", load_errors)
 total_loaded = sum(
     1 for ds in DATASETS for k in ['lr','lgb','bilstm','cnn']
     if all_models.get(ds, {}).get(k) is not None
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
