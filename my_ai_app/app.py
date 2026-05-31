@@ -223,7 +223,7 @@ def handcrafted_features(texts):
 
 
 # ── Model Download from Google Drive ──────────────────────────────────────────
-GDRIVE_FILE_ID = "1WvvfllhjnUMgreoGiGuiY3hzECYNa2g-"
+GDRIVE_FILE_ID = "1oqB258rpQZGydhLJXtQpErYY5o9irBbg"
 
 def download_models_from_drive():
     models_dir = os.path.join(BASE_DIR, "models")
@@ -257,18 +257,10 @@ def load_all_models():
             p = os.path.join(base, fname)
             try:    loaded[ds][key] = joblib.load(p) if os.path.exists(p) else None
             except: loaded[ds][key] = None; errors.append(key+'_'+ds)
-    for key, fname in [('bilstm', 'bilstm_'+ds+'.h5'), ('cnn', 'cnn_'+ds+'.h5')]:
-        p = os.path.join(base, fname)
-        if os.path.exists(p):
-            try:
-                loaded[ds][key] = load_model(p, compile=False)
-            except Exception as e:
-                loaded[ds][key] = None
-                errors.append(key+'_'+ds+': '+str(e)[:80])
-        else:
-            loaded[ds][key] = None
-            errors.append(key+'_'+ds+': FILE NOT FOUND')
-
+        for key, fname in [('bilstm', 'bilstm_'+ds+'.keras'), ('cnn', 'cnn_'+ds+'.keras')]:
+            p = os.path.join(base, fname)
+            try:    loaded[ds][key] = load_model(p, compile=False) if os.path.exists(p) else None
+            except: loaded[ds][key] = None; errors.append(key+'_'+ds)
         for key, fname in [('tfidf', 'tfidf_'+ds+'.pkl'), ('tok', 'tokenizer_'+ds+'.pkl')]:
             p = os.path.join(base, fname)
             try:    loaded[ds][key] = joblib.load(p) if os.path.exists(p) else None
@@ -322,9 +314,6 @@ def predict_dataset(text, ds, models, selected_models=None):
 # ── Load ──────────────────────────────────────────────────────────────────────
 with st.spinner('Initializing VeritasAI...'):
     all_models, load_errors = load_all_models()
-
-    if load_errors:
-        st.error("Load errors: " + str(load_errors))
 
 total_loaded = sum(
     1 for ds in DATASETS for k in ['lr','lgb','bilstm','cnn']
