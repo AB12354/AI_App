@@ -259,8 +259,12 @@ def load_all_models():
             except: loaded[ds][key] = None; errors.append(key+'_'+ds)
         for key, fname in [('bilstm', 'bilstm_'+ds+'.h5'), ('cnn', 'cnn_'+ds+'.h5')]:
             p = os.path.join(base, fname)
-            try:    loaded[ds][key] = load_model(p, compile=False) if os.path.exists(p) else None
+            try:    loaded[ds][key] = load_model(p, compile=False, safe_mode=False) if os.path.exists(p) else None
             except: loaded[ds][key] = None; errors.append(key+'_'+ds)
+            else:
+                    loaded[ds][key] = None
+                    errors.append(key+'_'+ds+': FILE NOT FOUND')  # ← ADD THIS
+
         for key, fname in [('tfidf', 'tfidf_'+ds+'.pkl'), ('tok', 'tokenizer_'+ds+'.pkl')]:
             p = os.path.join(base, fname)
             try:    loaded[ds][key] = joblib.load(p) if os.path.exists(p) else None
@@ -314,6 +318,9 @@ def predict_dataset(text, ds, models, selected_models=None):
 # ── Load ──────────────────────────────────────────────────────────────────────
 with st.spinner('Initializing VeritasAI...'):
     all_models, load_errors = load_all_models()
+
+    if load_errors:
+        st.error("Load errors: " + str(load_errors))
 
 total_loaded = sum(
     1 for ds in DATASETS for k in ['lr','lgb','bilstm','cnn']
