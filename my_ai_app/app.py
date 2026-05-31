@@ -11,9 +11,11 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import nltk
 nltk.download('stopwords', quiet=True)
-st.cache_resource.clear()
-# ── Base directory (fixes chart/CSV paths on Streamlit Cloud) ─────────────────
+# ── Base directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 st.set_page_config(
     page_title="VeritasAI - Fake News Detector",
