@@ -324,12 +324,11 @@ st.write("### Debug Info")
 st.write("BASE_DIR:", BASE_DIR)
 st.write("models_dir exists:", os.path.exists(models_dir))
 if os.path.exists(models_dir):
-files_found = os.listdir(models_dir)
-st.write("Files in models/:", files_found)
+    files_found = os.listdir(models_dir)
+    st.write("Files in models/:", files_found)
 else:
-st.write("❌ models/ folder does not exist")
+    st.write("❌ models/ folder does not exist")
 st.write("load_errors:", load_errors)
-
 total_loaded = sum(
     1 for ds in DATASETS for k in ['lr','lgb','bilstm','cnn']
     if all_models.get(ds, {}).get(k) is not None
