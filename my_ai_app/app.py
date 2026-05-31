@@ -61,7 +61,7 @@ html, body, [class*="css"] {
         radial-gradient(ellipse 35% 30% at 5% 85%, rgba(255,45,120,0.06) 0%, transparent 50%) !important;
 }
 
-.block-container { padding: 1.2rem 1.8rem !important; max-width: 1600px !important; }
+.block-container { padding: 0rem 1.8rem !important; max-width: 1600px !important; }
 #MainMenu, footer { visibility: hidden !important; }
 header { visibility: visible !important; background: transparent !important; }
 
@@ -75,9 +75,11 @@ section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #060C1A 0%, #080F20 100%) !important;
     border-right: 1px solid var(--border) !important;
     box-shadow: 6px 0 40px rgba(0,0,0,0.7) !important;
+    padding-top: 0 !important;
 }
-section[data-testid="stSidebar"] * { color: var(--text) !important; }
-
+section[data-testid="stSidebar"] > div:first-child {
+    padding-top: 0.5rem !important;
+}
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
