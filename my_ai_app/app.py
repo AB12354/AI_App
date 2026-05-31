@@ -268,6 +268,21 @@ def load_all_models():
     return loaded, errors
 
 
+# TEMPORARY DEBUG — remove after fixing
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+models_dir = os.path.join(BASE_DIR, 'models')
+
+st.write("### Debug Info")
+st.write("BASE_DIR:", BASE_DIR)
+st.write("models_dir exists:", os.path.exists(models_dir))
+if os.path.exists(models_dir):
+files_found = os.listdir(models_dir)
+st.write("Files in models/:", files_found)
+else:
+st.write("❌ models/ folder does not exist")
+st.write("load_errors:", load_errors)
+
 # ── Prediction ────────────────────────────────────────────────────────────────
 def predict_dataset(text, ds, models, selected_models=None):
     if selected_models is None:
