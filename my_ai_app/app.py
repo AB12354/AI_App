@@ -226,16 +226,20 @@ def handcrafted_features(texts):
 GDRIVE_FILE_ID = "1WvvfllhjnUMgreoGiGuiY3hzECYNa2g-"
 
 def download_models_from_drive():
-    if os.path.exists("models") and len(os.listdir("models")) > 0:
+    models_dir = os.path.join(BASE_DIR, "models")
+    if os.path.exists(models_dir) and len(os.listdir(models_dir)) > 0:
         return  # already downloaded, skip
     try:
-        import gdown, zipfile
-        os.makedirs("models", exist_ok=True)
-        zip_path = "models.zip"
+        import gdown, zipfile, inspect
+        os.makedirs(models_dir, exist_ok=True)
+        zip_path = os.path.join(BASE_DIR, "models.zip")
         url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
-        gdown.download(url, zip_path, quiet=False, fuzzy=True)
-        with zipfile.ZipFile(zip_path, 'r') as z:
-            z.extractall(".")
+        dl_kwargs = {"quiet": False}
+        if "fuzzy" in inspect.signature(gdown.download).parameters:
+            dl_kwargs["fuzzy"] = True
+        gdown.download(url, zip_path, **dl_kwargs)
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(BASE_DIR)
         os.remove(zip_path)
     except Exception as e:
         st.warning(f"Model download failed: {e}")
@@ -244,7 +248,7 @@ def download_models_from_drive():
 @st.cache_resource(show_spinner=False)
 def load_all_models():
     download_models_from_drive()
-    base = 'models'
+    base = os.path.join(BASE_DIR, 'models')
     loaded = {}
     errors = []
     for ds in DATASETS:
