@@ -521,16 +521,35 @@ with tab1:
         if not valid_preds:
             st.warning("No model produced a result. Check that models are loaded for this dataset.")
         else:
-            avg_prob   = np.mean(list(valid_preds.values()))
-            fake_votes = sum(1 for p in valid_preds.values() if p >= 0.5)
+            avg_prob    = np.mean(list(valid_preds.values()))
+            fake_votes  = sum(1 for p in valid_preds.values() if p >= 0.5)
             total_votes = len(valid_preds)
-            # Majority vote: need more than half to say FAKE
-            consensus  = 'FAKE' if fake_votes > total_votes / 2 else 'REAL'
-            conf       = avg_prob if consensus == 'FAKE' else 1 - avg_prob
 
-            b_bg  = 'rgba(255,45,120,0.08)'  if consensus == 'FAKE' else 'rgba(0,255,136,0.08)'
-            b_bdr = '#FF2D78'                 if consensus == 'FAKE' else '#00FF88'
-            b_ico = 'FAKE NEWS'               if consensus == 'FAKE' else 'REAL NEWS'
+            # Weighted confidence: average of each model's distance from 0.5
+            fake_conf_avg = np.mean([p for p in valid_preds.values() if p >= 0.5]) if fake_votes > 0 else 0
+            real_conf_avg = np.mean([1-p for p in valid_preds.values() if p < 0.5]) if (total_votes - fake_votes) > 0 else 0
+
+            # Need strong majority (≥3/4) AND avg fake prob > 0.6 to call FAKE confidently
+            if fake_votes >= 3 and avg_prob >= 0.60:
+                consensus = 'FAKE'
+                conf      = avg_prob
+            elif fake_votes <= 1 or avg_prob <= 0.40:
+                consensus = 'REAL'
+                conf      = 1 - avg_prob
+            else:
+                # Split/uncertain — call UNCERTAIN
+                consensus = 'UNCERTAIN'
+                conf      = max(avg_prob, 1 - avg_prob)
+
+            b_bg  = ('rgba(255,45,120,0.08)'  if consensus == 'FAKE'
+                     else 'rgba(0,255,136,0.08)' if consensus == 'REAL'
+                     else 'rgba(255,184,0,0.08)')
+            b_bdr = ('#FF2D78' if consensus == 'FAKE'
+                     else '#00FF88' if consensus == 'REAL'
+                     else '#FFB800')
+            b_ico = ('FAKE NEWS' if consensus == 'FAKE'
+                     else 'REAL NEWS' if consensus == 'REAL'
+                     else 'UNCERTAIN')
             conf_bar = int(conf * 100)
 
             st.markdown(
@@ -542,7 +561,9 @@ with tab1:
                 " letter-spacing:0.12em; line-height:1;'>" + b_ico + "</div>"
                 "<div style='color:#3A5070; font-size:0.79rem; margin-top:0.35rem; font-family:DM Mono,monospace;'>"
                 + str(fake_votes) + "/" + str(total_votes) + " models say FAKE · "
-                + str(round(conf*100, 1)) + "% confidence</div>"
+                + str(round(conf*100, 1)) + "% confidence"
+                + (" · models disagree, treat with caution" if consensus == 'UNCERTAIN' else "")
+                + "</div>"
                 "</div>"
                 "<div style='min-width:160px;'>"
                 "<div style='display:flex; justify-content:space-between; margin-bottom:0.35rem;'>"
