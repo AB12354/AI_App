@@ -561,72 +561,73 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            active_preds = {k: v for k, v in preds.items() if k in mods_used}
-            n_cols = min(len(active_preds), 2) if active_preds else 1
-            result_cols = st.columns(n_cols, gap="medium")
-            col_idx = 0
+            # Per-model breakdown hidden inside expander
+            with st.expander("🔬 View per-model breakdown & preprocessed text"):
+                active_preds = {k: v for k, v in preds.items() if k in mods_used}
+                n_cols = min(len(active_preds), 2) if active_preds else 1
+                result_cols = st.columns(n_cols, gap="medium")
+                col_idx = 0
 
-            for model_name in MODEL_META.keys():
-                if model_name not in active_preds:
-                    continue
-                prob = active_preds[model_name]
-                meta = MODEL_META[model_name]
-                mc   = meta['color']
-                col  = result_cols[col_idx % n_cols]
-                col_idx += 1
+                for model_name in MODEL_META.keys():
+                    if model_name not in active_preds:
+                        continue
+                    prob = active_preds[model_name]
+                    meta = MODEL_META[model_name]
+                    mc   = meta['color']
+                    col  = result_cols[col_idx % n_cols]
+                    col_idx += 1
 
-                if prob is None:
+                    if prob is None:
+                        with col:
+                            st.markdown(
+                                "<div style='background:#0A1020; border:1px solid #1A2840;"
+                                " border-radius:11px; padding:0.9rem 1.1rem; margin-bottom:0.55rem; opacity:0.35;'>"
+                                "<div style='font-size:0.8rem; color:#2A3D5A;'>"
+                                + meta['icon'] + " " + model_name + " — not available</div></div>",
+                                unsafe_allow_html=True
+                            )
+                        continue
+
+                    verdict  = 'FAKE' if prob >= 0.5 else 'REAL'
+                    conf_val = prob if prob >= 0.5 else 1 - prob
+                    vc       = '#FF2D78' if verdict == 'FAKE' else '#00FF88'
+                    bar_w    = int(conf_val * 100)
+                    v_bg     = 'rgba(255,45,120,0.1)' if verdict == 'FAKE' else 'rgba(0,255,136,0.1)'
+                    v_bdr    = 'rgba(255,45,120,0.25)' if verdict == 'FAKE' else 'rgba(0,255,136,0.25)'
+
                     with col:
                         st.markdown(
                             "<div style='background:#0A1020; border:1px solid #1A2840;"
-                            " border-radius:11px; padding:0.9rem 1.1rem; margin-bottom:0.55rem; opacity:0.35;'>"
-                            "<div style='font-size:0.8rem; color:#2A3D5A;'>"
-                            + meta['icon'] + " " + model_name + " — not available</div></div>",
+                            " border-radius:11px; padding:1rem 1.15rem; margin-bottom:0.55rem;"
+                            " border-left:2.5px solid " + mc + ";'>"
+                            "<div style='display:flex; justify-content:space-between;"
+                            " align-items:flex-start; margin-bottom:0.65rem;'>"
+                            "<div>"
+                            "<div style='font-size:0.88rem; font-weight:600; color:#F0F6FF;'>"
+                            + meta['icon'] + " " + model_name + "</div>"
+                            "<div style='font-size:0.67rem; color:#2A3D5A; text-transform:uppercase;"
+                            " letter-spacing:0.1em; margin-top:0.12rem; font-family:DM Mono,monospace;'>"
+                            + meta['type'] + "</div>"
+                            "</div>"
+                            "<div style='background:" + v_bg + "; color:" + vc + ";"
+                            " border:1px solid " + v_bdr + "; border-radius:6px;"
+                            " padding:0.22rem 0.75rem; font-family:Bebas Neue; font-size:1rem;"
+                            " letter-spacing:0.08em;'>" + verdict + "</div>"
+                            "</div>"
+                            "<div style='background:#152040; border-radius:99px; height:4px;"
+                            " overflow:hidden; margin-bottom:0.35rem;'>"
+                            "<div style='width:" + str(bar_w) + "%; height:100%; border-radius:99px;"
+                            " background:" + vc + ";'></div></div>"
+                            "<div style='display:flex; justify-content:space-between;'>"
+                            "<span style='font-size:0.68rem; color:#2A3D5A;"
+                            " font-family:DM Mono,monospace;'>confidence</span>"
+                            "<span style='font-size:0.72rem; color:" + vc + "; font-weight:600;"
+                            " font-family:DM Mono,monospace;'>" + str(round(conf_val*100,1)) + "%</span>"
+                            "</div></div>",
                             unsafe_allow_html=True
                         )
-                    continue
 
-                verdict  = 'FAKE' if prob >= 0.5 else 'REAL'
-                conf_val = prob if prob >= 0.5 else 1 - prob
-                vc       = '#FF2D78' if verdict == 'FAKE' else '#00FF88'
-                bar_w    = int(conf_val * 100)
-                v_bg     = 'rgba(255,45,120,0.1)' if verdict == 'FAKE' else 'rgba(0,255,136,0.1)'
-                v_bdr    = 'rgba(255,45,120,0.25)' if verdict == 'FAKE' else 'rgba(0,255,136,0.25)'
-
-                with col:
-                    st.markdown(
-                        "<div style='background:#0A1020; border:1px solid #1A2840;"
-                        " border-radius:11px; padding:1rem 1.15rem; margin-bottom:0.55rem;"
-                        " border-left:2.5px solid " + mc + ";'>"
-                        "<div style='display:flex; justify-content:space-between;"
-                        " align-items:flex-start; margin-bottom:0.65rem;'>"
-                        "<div>"
-                        "<div style='font-size:0.88rem; font-weight:600; color:#F0F6FF;'>"
-                        + meta['icon'] + " " + model_name + "</div>"
-                        "<div style='font-size:0.67rem; color:#2A3D5A; text-transform:uppercase;"
-                        " letter-spacing:0.1em; margin-top:0.12rem; font-family:DM Mono,monospace;'>"
-                        + meta['type'] + "</div>"
-                        "</div>"
-                        "<div style='background:" + v_bg + "; color:" + vc + ";"
-                        " border:1px solid " + v_bdr + "; border-radius:6px;"
-                        " padding:0.22rem 0.75rem; font-family:Bebas Neue; font-size:1rem;"
-                        " letter-spacing:0.08em;'>" + verdict + "</div>"
-                        "</div>"
-                        "<div style='background:#152040; border-radius:99px; height:4px;"
-                        " overflow:hidden; margin-bottom:0.35rem;'>"
-                        "<div style='width:" + str(bar_w) + "%; height:100%; border-radius:99px;"
-                        " background:" + vc + ";'></div></div>"
-                        "<div style='display:flex; justify-content:space-between;'>"
-                        "<span style='font-size:0.68rem; color:#2A3D5A;"
-                        " font-family:DM Mono,monospace;'>confidence</span>"
-                        "<span style='font-size:0.72rem; color:" + vc + "; font-weight:600;"
-                        " font-family:DM Mono,monospace;'>" + str(round(conf_val*100,1)) + "%</span>"
-                        "</div></div>",
-                        unsafe_allow_html=True
-                    )
-
-        with st.expander("🔬 View preprocessed text"):
-            st.code(res['cleaned'][:500] + ('...' if len(res['cleaned']) > 500 else ''), language=None)
+                st.code(res['cleaned'][:500] + ('...' if len(res['cleaned']) > 500 else ''), language=None)
 
 
 
