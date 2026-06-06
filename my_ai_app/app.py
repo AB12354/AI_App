@@ -10,6 +10,25 @@ from scipy.sparse import hstack, csr_matrix
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import nltk
+from huggingface_hub import hf_hub_download
+import joblib
+import tensorflow as tf
+import streamlit as st
+
+@st.cache_resource
+def load_models():
+    repo = "https://huggingface.co/abjhbjhe/Fake_news/tree/main"  # ← change this
+    
+    lr    = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
+    lgbm  = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
+    bilstm = tf.keras.models.load_model(hf_hub_download(repo, "bilstm_combined.keras"))
+    cnn   = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
+    
+    return lr, lgbm, bilstm, cnn
+
+lr, lgbm, bilstm, cnn = load_models()
+
+
 nltk.download('stopwords', quiet=True)
 # ── Base directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
