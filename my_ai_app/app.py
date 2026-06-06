@@ -4,28 +4,39 @@ import numpy as np
 import joblib
 import re
 import os
+import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from scipy.sparse import hstack, csr_matrix
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-import nltk
 from huggingface_hub import hf_hub_download
-import joblib
 import tensorflow as tf
-import streamlit as st
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+# ── MUST BE FIRST STREAMLIT COMMAND ──
+st.set_page_config(
+    page_title="VeritasAI - Fake News Detector",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+nltk.download('stopwords', quiet=True)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @st.cache_resource
 def load_models():
     repo = "abjhbjhe/Fake_news"
-    
     lr     = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
     lgbm   = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
     bilstm = tf.keras.models.load_model(hf_hub_download(repo, "bilstm_combined.keras"))
     cnn    = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
-    
     return lr, lgbm, bilstm, cnn
+
 lr, lgbm, bilstm, cnn = load_models()
 
 
