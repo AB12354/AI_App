@@ -7,3 +7,4 @@ pandas
 scipy
 numpy
 streamlit
+huggingface_hub
