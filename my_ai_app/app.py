@@ -123,7 +123,16 @@ def load_all_models():
     except Exception as e:
         errors.append(str(e))
         return {ds: {} for ds in DATASETS}, errors
-
+    # Load tfidf and tokenizer from HuggingFace
+    try:
+        tfidf_model = joblib.load(hf_hub_download(repo, "tfidf_combined.pkl"))
+    except Exception as e:
+        tfidf_model = None
+    
+    try:
+        tok_model = joblib.load(hf_hub_download(repo, "tokenizer_combined.pkl"))
+    except Exception as e:
+        tok_model = None
     combined = {
         'lr':     lr_model,
         'lgb':    lgbm_model,
