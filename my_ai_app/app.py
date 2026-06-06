@@ -28,163 +28,6 @@ nltk.download('stopwords', quiet=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-@st.cache_resource
-def load_models():
-    repo = "abjhbjhe/Fake_news"
-    lr     = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
-    lgbm   = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
-    bilstm = tf.keras.models.load_model(hf_hub_download(repo, "bilstm_combined.keras"))
-    cnn    = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
-    return lr, lgbm, bilstm, cnn
-
-lr, lgbm, bilstm, cnn = load_models()
-
-
-nltk.download('stopwords', quiet=True)
-# ── Base directory
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-
-st.set_page_config(
-    page_title="VeritasAI - Fake News Detector",
-    page_icon="🔍",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap');
-
-:root {
-    --bg: #04080F;
-    --surface: #0A1020;
-    --surface2: #0F1830;
-    --surface3: #152040;
-    --border: #1A2840;
-    --border2: #243560;
-    --neon: #00FF88;
-    --neon2: #FF2D78;
-    --gold: #FFB800;
-    --purple: #7C3AED;
-    --sky: #00D4FF;
-    --text: #F0F6FF;
-    --text2: #6B82A8;
-    --text3: #2A3D5A;
-    --font-d: 'Bebas Neue', sans-serif;
-    --font-b: 'Space Grotesk', sans-serif;
-    --font-m: 'DM Mono', monospace;
-}
-
-html, body, [class*="css"] {
-    background-color: var(--bg) !important;
-    color: var(--text) !important;
-    font-family: var(--font-b) !important;
-}
-
-.stApp {
-    background: var(--bg) !important;
-    background-image:
-        radial-gradient(ellipse 55% 45% at 8% 12%, rgba(124,58,237,0.15) 0%, transparent 60%),
-        radial-gradient(ellipse 45% 35% at 92% 8%, rgba(0,255,136,0.08) 0%, transparent 55%),
-        radial-gradient(ellipse 50% 40% at 50% 95%, rgba(0,212,255,0.06) 0%, transparent 55%),
-        radial-gradient(ellipse 35% 30% at 5% 85%, rgba(255,45,120,0.06) 0%, transparent 50%) !important;
-}
-
-.block-container { padding: 0rem 1.8rem !important; max-width: 1600px !important; }
-#MainMenu, footer { visibility: hidden !important; }
-header { visibility: visible !important; background: transparent !important; }
-
-[data-testid="collapsedControl"] {
-    display: flex !important; visibility: visible !important;
-    color: var(--neon) !important; background: var(--surface) !important;
-    border: 1px solid var(--border2) !important; border-radius: 8px !important;
-}
-
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #060C1A 0%, #080F20 100%) !important;
-    border-right: 1px solid var(--border) !important;
-    box-shadow: 6px 0 40px rgba(0,0,0,0.7) !important;
-    padding-top: 0 !important;
-}
-section[data-testid="stSidebar"] > div:first-child {
-    padding-top: 0.5rem !important;
-}
-::-webkit-scrollbar { width: 3px; height: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: var(--neon); }
-
-.stTabs [data-baseweb="tab-list"] {
-    background: var(--surface) !important; border: 1px solid var(--border) !important;
-    border-radius: 12px !important; padding: 4px !important; gap: 2px !important;
-}
-.stTabs [data-baseweb="tab"] {
-    background: transparent !important; color: var(--text2) !important;
-    border-radius: 9px !important; font-family: var(--font-b) !important;
-    font-weight: 500 !important; font-size: 0.86rem !important;
-    padding: 0.45rem 1.1rem !important; border: none !important;
-}
-.stTabs [aria-selected="true"] {
-    background: rgba(0,255,136,0.1) !important; color: var(--neon) !important;
-    border: 1px solid rgba(0,255,136,0.25) !important;
-}
-
-.stTextArea textarea {
-    background: var(--surface2) !important; border: 1px solid var(--border2) !important;
-    border-radius: 12px !important; color: var(--text) !important;
-    font-family: var(--font-b) !important; font-size: 0.93rem !important; line-height: 1.65 !important;
-}
-.stTextArea textarea:focus {
-    border-color: var(--neon) !important; box-shadow: 0 0 0 3px rgba(0,255,136,0.08) !important;
-}
-.stTextArea textarea::placeholder { color: var(--text3) !important; }
-
-.stButton > button {
-    font-family: var(--font-b) !important; font-weight: 600 !important;
-    border-radius: 9px !important; transition: all 0.2s !important;
-    width: 100% !important; font-size: 0.88rem !important; padding: 0.55rem 1.1rem !important;
-}
-.stButton:nth-of-type(1) > button {
-    background: linear-gradient(135deg, #00FF88, #00CC6A) !important;
-    color: #010F05 !important; border: none !important;
-    box-shadow: 0 4px 20px rgba(0,255,136,0.3) !important;
-}
-.stButton:nth-of-type(1) > button:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 30px rgba(0,255,136,0.45) !important; }
-.stButton:nth-of-type(2) > button { background: var(--surface2) !important; color: var(--text2) !important; border: 1px solid var(--border2) !important; }
-.stButton:nth-of-type(2) > button:hover { border-color: var(--neon2) !important; color: var(--neon2) !important; }
-.stButton:nth-of-type(3) > button { background: rgba(124,58,237,0.1) !important; color: #A78BFA !important; border: 1px solid rgba(124,58,237,0.3) !important; }
-.stButton:nth-of-type(3) > button:hover { background: rgba(124,58,237,0.18) !important; }
-
-.stSelectbox > div > div {
-    background: var(--surface2) !important; border: 1px solid var(--border2) !important;
-    border-radius: 9px !important; color: var(--text) !important; font-family: var(--font-b) !important;
-}
-.stMultiSelect > div { background: var(--surface2) !important; border: 1px solid var(--border2) !important; border-radius: 9px !important; }
-.stMultiSelect span[data-baseweb="tag"] { background: rgba(0,255,136,0.1) !important; border: 1px solid rgba(0,255,136,0.3) !important; border-radius: 6px !important; color: var(--neon) !important; }
-
-.stDataFrame { border-radius: 12px !important; overflow: hidden !important; border: 1px solid var(--border) !important; }
-[data-testid="stDataFrame"] table { background: var(--surface) !important; font-family: var(--font-m) !important; font-size: 0.79rem !important; }
-[data-testid="stDataFrame"] th { background: var(--surface3) !important; color: var(--neon) !important; font-weight: 600 !important; letter-spacing: 0.07em !important; text-transform: uppercase !important; font-size: 0.71rem !important; border-bottom: 1px solid var(--border2) !important; }
-[data-testid="stDataFrame"] td { color: var(--text) !important; }
-
-.streamlit-expanderHeader { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 9px !important; color: var(--text2) !important; font-size: 0.87rem !important; }
-.streamlit-expanderContent { background: var(--surface2) !important; border: 1px solid var(--border) !important; border-top: none !important; border-radius: 0 0 9px 9px !important; }
-
-.stDownloadButton > button { background: rgba(0,255,136,0.05) !important; color: var(--neon) !important; border: 1px solid rgba(0,255,136,0.2) !important; border-radius: 9px !important; font-weight: 500 !important; font-size: 0.84rem !important; }
-.stDownloadButton > button:hover { background: rgba(0,255,136,0.1) !important; }
-
-.stSpinner > div { border-top-color: var(--neon) !important; }
-.stWarning { background: rgba(255,184,0,0.07) !important; border-color: rgba(255,184,0,0.3) !important; }
-.stError   { background: rgba(255,45,120,0.07) !important; border-color: rgba(255,45,120,0.3) !important; }
-.stSuccess { background: rgba(0,255,136,0.07) !important; border-color: rgba(0,255,136,0.3) !important; }
-code { font-family: var(--font-m) !important; color: var(--neon) !important; }
-.stCode { background: var(--surface2) !important; border: 1px solid var(--border) !important; border-radius: 9px !important; }
-</style>
-""", unsafe_allow_html=True)
-
 # ── Constants ─────────────────────────────────────────────────────────────────
 MAX_SEQ_LEN = 300
 STOP_WORDS  = set(stopwords.words('english'))
@@ -214,8 +57,7 @@ TEAM = [
     {'name':'Abdullah Bin Umar','role':'Group Lead · Data Pipeline & EDA',         'emoji':'👨‍💻','id':'F2024-0922'},
     {'name':'Ahmed Ali Qaiser', 'role':'Feature Engineering · TF-IDF & Sequences', 'emoji':'⚙️', 'id':'F2024-1009'},
     {'name':'Abdul Rehman',     'role':'Model Training · 32 Training Runs',         'emoji':'🤖', 'id':'F2024-1237'},
-    {'name':'Muhammad Awais',    'role':'Evaluation · Charts & Metrics',             'emoji':'📊', 'id':'F2024-0783'},
-    #{'name':'Team Member 5',    'role':'Deployment · Streamlit & HuggingFace',      'emoji':'🚀', 'id':''},
+    {'name':'Muhammad Awais',   'role':'Evaluation · Charts & Metrics',             'emoji':'📊', 'id':'F2024-0783'},
 ]
 
 MEMBER_COLORS = ['#00FF88','#7C3AED','#FFB800','#FF2D78','#00D4FF']
@@ -254,32 +96,49 @@ def handcrafted_features(texts):
         feats.append([length, punct_ratio, unique_ratio])
     return np.array(feats)
 
-
-
-
-# ── Model Loading ─────────────────────────────────────────────────────────────
+# ── Model Loading from HuggingFace ────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_all_models():
-    base = os.path.join(BASE_DIR, 'models')
+    repo = "abjhbjhe/Fake_news"
     loaded = {}
     errors = []
+
+    # Load tfidf and tokenizer from local models/ folder if available
+    tfidf_model = None
+    tok_model   = None
+    base = os.path.join(BASE_DIR, 'models')
+    if os.path.exists(os.path.join(base, 'tfidf_combined.pkl')):
+        try: tfidf_model = joblib.load(os.path.join(base, 'tfidf_combined.pkl'))
+        except: pass
+    if os.path.exists(os.path.join(base, 'tokenizer_combined.pkl')):
+        try: tok_model = joblib.load(os.path.join(base, 'tokenizer_combined.pkl'))
+        except: pass
+
+    # Load 4 models from HuggingFace
+    try:
+        lr_model     = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
+        lgbm_model   = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
+        bilstm_model = tf.keras.models.load_model(hf_hub_download(repo, "bilstm_combined.keras"))
+        cnn_model    = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
+    except Exception as e:
+        errors.append(str(e))
+        return {ds: {} for ds in DATASETS}, errors
+
+    combined = {
+        'lr':     lr_model,
+        'lgb':    lgbm_model,
+        'bilstm': bilstm_model,
+        'cnn':    cnn_model,
+        'tfidf':  tfidf_model,
+        'tok':    tok_model,
+    }
+
+    # All datasets share the same combined models
     for ds in DATASETS:
-        loaded[ds] = {}
-        for key, fname in [('lr', 'lr_'+ds+'.pkl'), ('lgb', 'lgb_'+ds+'.pkl')]:
-            p = os.path.join(base, fname)
-            try:    loaded[ds][key] = joblib.load(p) if os.path.exists(p) else None
-            except: loaded[ds][key] = None; errors.append(key+'_'+ds)
-        for key, fname in [('bilstm', 'bilstm_'+ds+'.keras'), ('cnn', 'cnn_'+ds+'.keras')]:
-            p = os.path.join(base, fname)
-            try:    loaded[ds][key] = load_model(p, compile=False) if os.path.exists(p) else None
-            except: loaded[ds][key] = None; errors.append(key+'_'+ds)
-        for key, fname in [('tfidf', 'tfidf_'+ds+'.pkl'), ('tok', 'tokenizer_'+ds+'.pkl')]:
-            p = os.path.join(base, fname)
-            try:    loaded[ds][key] = joblib.load(p) if os.path.exists(p) else None
-            except: loaded[ds][key] = None
+        loaded[ds] = combined
+
     return loaded, errors
 
-    
 # ── Prediction ────────────────────────────────────────────────────────────────
 def predict_dataset(text, ds, models, selected_models=None):
     if selected_models is None:
@@ -323,7 +182,70 @@ def predict_dataset(text, ds, models, selected_models=None):
         else: preds[name] = None
     return preds, cleaned
 
-# ── Load ──────────────────────────────────────────────────────────────────────
+# ── CSS ───────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+    --bg: #04080F; --surface: #0A1020; --surface2: #0F1830; --surface3: #152040;
+    --border: #1A2840; --border2: #243560; --neon: #00FF88; --neon2: #FF2D78;
+    --gold: #FFB800; --purple: #7C3AED; --sky: #00D4FF;
+    --text: #F0F6FF; --text2: #6B82A8; --text3: #2A3D5A;
+    --font-d: 'Bebas Neue', sans-serif; --font-b: 'Space Grotesk', sans-serif; --font-m: 'DM Mono', monospace;
+}
+html, body, [class*="css"] { background-color: var(--bg) !important; color: var(--text) !important; font-family: var(--font-b) !important; }
+.stApp {
+    background: var(--bg) !important;
+    background-image:
+        radial-gradient(ellipse 55% 45% at 8% 12%, rgba(124,58,237,0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 45% 35% at 92% 8%, rgba(0,255,136,0.08) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 50% 95%, rgba(0,212,255,0.06) 0%, transparent 55%),
+        radial-gradient(ellipse 35% 30% at 5% 85%, rgba(255,45,120,0.06) 0%, transparent 50%) !important;
+}
+.block-container { padding: 0rem 1.8rem !important; max-width: 1600px !important; }
+#MainMenu, footer { visibility: hidden !important; }
+header { visibility: visible !important; background: transparent !important; }
+[data-testid="collapsedControl"] { display: flex !important; visibility: visible !important; color: var(--neon) !important; background: var(--surface) !important; border: 1px solid var(--border2) !important; border-radius: 8px !important; }
+section[data-testid="stSidebar"] { background: linear-gradient(180deg, #060C1A 0%, #080F20 100%) !important; border-right: 1px solid var(--border) !important; box-shadow: 6px 0 40px rgba(0,0,0,0.7) !important; padding-top: 0 !important; }
+section[data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !important; }
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--neon); }
+.stTabs [data-baseweb="tab-list"] { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; padding: 4px !important; gap: 2px !important; }
+.stTabs [data-baseweb="tab"] { background: transparent !important; color: var(--text2) !important; border-radius: 9px !important; font-family: var(--font-b) !important; font-weight: 500 !important; font-size: 0.86rem !important; padding: 0.45rem 1.1rem !important; border: none !important; }
+.stTabs [aria-selected="true"] { background: rgba(0,255,136,0.1) !important; color: var(--neon) !important; border: 1px solid rgba(0,255,136,0.25) !important; }
+.stTextArea textarea { background: var(--surface2) !important; border: 1px solid var(--border2) !important; border-radius: 12px !important; color: var(--text) !important; font-family: var(--font-b) !important; font-size: 0.93rem !important; line-height: 1.65 !important; }
+.stTextArea textarea:focus { border-color: var(--neon) !important; box-shadow: 0 0 0 3px rgba(0,255,136,0.08) !important; }
+.stTextArea textarea::placeholder { color: var(--text3) !important; }
+.stButton > button { font-family: var(--font-b) !important; font-weight: 600 !important; border-radius: 9px !important; transition: all 0.2s !important; width: 100% !important; font-size: 0.88rem !important; padding: 0.55rem 1.1rem !important; }
+.stButton:nth-of-type(1) > button { background: linear-gradient(135deg, #00FF88, #00CC6A) !important; color: #010F05 !important; border: none !important; box-shadow: 0 4px 20px rgba(0,255,136,0.3) !important; }
+.stButton:nth-of-type(1) > button:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 30px rgba(0,255,136,0.45) !important; }
+.stButton:nth-of-type(2) > button { background: var(--surface2) !important; color: var(--text2) !important; border: 1px solid var(--border2) !important; }
+.stButton:nth-of-type(2) > button:hover { border-color: var(--neon2) !important; color: var(--neon2) !important; }
+.stButton:nth-of-type(3) > button { background: rgba(124,58,237,0.1) !important; color: #A78BFA !important; border: 1px solid rgba(124,58,237,0.3) !important; }
+.stSelectbox > div > div { background: var(--surface2) !important; border: 1px solid var(--border2) !important; border-radius: 9px !important; color: var(--text) !important; font-family: var(--font-b) !important; }
+.stMultiSelect > div { background: var(--surface2) !important; border: 1px solid var(--border2) !important; border-radius: 9px !important; }
+.stMultiSelect span[data-baseweb="tag"] { background: rgba(0,255,136,0.1) !important; border: 1px solid rgba(0,255,136,0.3) !important; border-radius: 6px !important; color: var(--neon) !important; }
+.stDataFrame { border-radius: 12px !important; overflow: hidden !important; border: 1px solid var(--border) !important; }
+[data-testid="stDataFrame"] table { background: var(--surface) !important; font-family: var(--font-m) !important; font-size: 0.79rem !important; }
+[data-testid="stDataFrame"] th { background: var(--surface3) !important; color: var(--neon) !important; font-weight: 600 !important; letter-spacing: 0.07em !important; text-transform: uppercase !important; font-size: 0.71rem !important; border-bottom: 1px solid var(--border2) !important; }
+[data-testid="stDataFrame"] td { color: var(--text) !important; }
+.streamlit-expanderHeader { background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: 9px !important; color: var(--text2) !important; font-size: 0.87rem !important; }
+.streamlit-expanderContent { background: var(--surface2) !important; border: 1px solid var(--border) !important; border-top: none !important; border-radius: 0 0 9px 9px !important; }
+.stDownloadButton > button { background: rgba(0,255,136,0.05) !important; color: var(--neon) !important; border: 1px solid rgba(0,255,136,0.2) !important; border-radius: 9px !important; font-weight: 500 !important; font-size: 0.84rem !important; }
+.stDownloadButton > button:hover { background: rgba(0,255,136,0.1) !important; }
+.stSpinner > div { border-top-color: var(--neon) !important; }
+.stWarning { background: rgba(255,184,0,0.07) !important; border-color: rgba(255,184,0,0.3) !important; }
+.stError   { background: rgba(255,45,120,0.07) !important; border-color: rgba(255,45,120,0.3) !important; }
+.stSuccess { background: rgba(0,255,136,0.07) !important; border-color: rgba(0,255,136,0.3) !important; }
+code { font-family: var(--font-m) !important; color: var(--neon) !important; }
+.stCode { background: var(--surface2) !important; border: 1px solid var(--border) !important; border-radius: 9px !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Load models ───────────────────────────────────────────────────────────────
 with st.spinner('Initializing VeritasAI...'):
     all_models, load_errors = load_all_models()
 
@@ -367,7 +289,6 @@ with st.sidebar:
     )
 
     st.markdown(lbl("Available Models"), unsafe_allow_html=True)
-
     for mname, meta in MODEL_META.items():
         ds_count = sum(1 for ds in DATASETS if all_models.get(ds, {}).get(meta['key']) is not None)
         mc = meta['color']
@@ -451,9 +372,21 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # ════════ TAB 1 — ANALYZE ════════════════════════════════════════════════════
 with tab1:
-    # Dataset locked to Combined; all 4 models always run
     selected_ds     = 'Combined'
     selected_models = list(MODEL_META.keys())
+
+    # Check if tfidf/tokenizer are available
+    has_tfidf = all_models.get('Combined', {}).get('tfidf') is not None
+    has_tok   = all_models.get('Combined', {}).get('tok') is not None
+
+    if not has_tfidf or not has_tok:
+        st.warning(
+            "⚠️ TF-IDF vectorizer and/or tokenizer not found. "
+            "Logistic Regression and LightGBM require tfidf_combined.pkl; "
+            "BiLSTM and CNN-Text require tokenizer_combined.pkl. "
+            "Please upload these to your Hugging Face repo or models/ folder.",
+            icon=None
+        )
 
     st.markdown(lbl("Quick Examples"), unsafe_allow_html=True)
     example_choice = st.selectbox(
@@ -483,7 +416,6 @@ with tab1:
     if example_choice in EXAMPLES:
         st.session_state['article_text'] = EXAMPLES[example_choice]
 
-    # Static badge row — always all 4 models on Combined
     badges = ""
     for m in MODEL_META:
         mc  = MODEL_META[m]['color']
@@ -514,10 +446,7 @@ with tab1:
 
     b1, b2 = st.columns([3,1], gap="small")
     with b1:
-        analyze_btn = st.button(
-            "🔍  Analyze with 4 Models",
-            use_container_width=True
-        )
+        analyze_btn = st.button("🔍  Analyze with 4 Models", use_container_width=True)
     with b2:
         clear_btn = st.button("✕  Clear", use_container_width=True)
 
@@ -534,11 +463,9 @@ with tab1:
             'preds': preds, 'cleaned': cleaned,
             'dataset': selected_ds, 'models_used': selected_models
         }
-
     elif analyze_btn and not (article and article.strip()):
         st.warning("Please paste an article first.")
 
-    # ── Results ───────────────────────────────────────────────────────────────
     if 'analysis_results' in st.session_state:
         res       = st.session_state['analysis_results']
         preds     = res['preds']
@@ -549,37 +476,22 @@ with tab1:
         valid_preds = {k: v for k, v in preds.items() if v is not None}
 
         if not valid_preds:
-            st.warning("No model produced a result. Check that models are loaded for this dataset.")
+            st.warning("No model produced a result. Make sure tfidf_combined.pkl and tokenizer_combined.pkl are uploaded to your Hugging Face repo.")
         else:
             avg_prob    = np.mean(list(valid_preds.values()))
             fake_votes  = sum(1 for p in valid_preds.values() if p >= 0.5)
             total_votes = len(valid_preds)
 
-            # Weighted confidence: average of each model's distance from 0.5
-            fake_conf_avg = np.mean([p for p in valid_preds.values() if p >= 0.5]) if fake_votes > 0 else 0
-            real_conf_avg = np.mean([1-p for p in valid_preds.values() if p < 0.5]) if (total_votes - fake_votes) > 0 else 0
-
-            # Need strong majority (≥3/4) AND avg fake prob > 0.6 to call FAKE confidently
             if fake_votes >= 3 and avg_prob >= 0.60:
-                consensus = 'FAKE'
-                conf      = avg_prob
+                consensus = 'FAKE'; conf = avg_prob
             elif fake_votes <= 1 or avg_prob <= 0.40:
-                consensus = 'REAL'
-                conf      = 1 - avg_prob
+                consensus = 'REAL'; conf = 1 - avg_prob
             else:
-                # Split/uncertain — call UNCERTAIN
-                consensus = 'UNCERTAIN'
-                conf      = max(avg_prob, 1 - avg_prob)
+                consensus = 'UNCERTAIN'; conf = max(avg_prob, 1 - avg_prob)
 
-            b_bg  = ('rgba(255,45,120,0.08)'  if consensus == 'FAKE'
-                     else 'rgba(0,255,136,0.08)' if consensus == 'REAL'
-                     else 'rgba(255,184,0,0.08)')
-            b_bdr = ('#FF2D78' if consensus == 'FAKE'
-                     else '#00FF88' if consensus == 'REAL'
-                     else '#FFB800')
-            b_ico = ('FAKE NEWS' if consensus == 'FAKE'
-                     else 'REAL NEWS' if consensus == 'REAL'
-                     else 'UNCERTAIN')
+            b_bg  = ('rgba(255,45,120,0.08)'  if consensus == 'FAKE' else 'rgba(0,255,136,0.08)' if consensus == 'REAL' else 'rgba(255,184,0,0.08)')
+            b_bdr = ('#FF2D78' if consensus == 'FAKE' else '#00FF88' if consensus == 'REAL' else '#FFB800')
+            b_ico = ('FAKE NEWS' if consensus == 'FAKE' else 'REAL NEWS' if consensus == 'REAL' else 'UNCERTAIN')
             conf_bar = int(conf * 100)
 
             st.markdown(
@@ -593,17 +505,13 @@ with tab1:
                 + str(fake_votes) + "/" + str(total_votes) + " models say FAKE · "
                 + str(round(conf*100, 1)) + "% confidence"
                 + (" · models disagree, treat with caution" if consensus == 'UNCERTAIN' else "")
-                + "</div>"
-                "</div>"
+                + "</div></div>"
                 "<div style='min-width:160px;'>"
                 "<div style='display:flex; justify-content:space-between; margin-bottom:0.35rem;'>"
-                "<span style='font-size:0.68rem; color:#2A3D5A; font-family:DM Mono,monospace;"
-                " text-transform:uppercase;'>Confidence</span>"
-                "<span style='font-size:0.68rem; color:" + b_bdr + "; font-family:DM Mono,monospace;"
-                " font-weight:600;'>" + str(round(conf*100, 1)) + "%</span></div>"
+                "<span style='font-size:0.68rem; color:#2A3D5A; font-family:DM Mono,monospace; text-transform:uppercase;'>Confidence</span>"
+                "<span style='font-size:0.68rem; color:" + b_bdr + "; font-family:DM Mono,monospace; font-weight:600;'>" + str(round(conf*100, 1)) + "%</span></div>"
                 "<div style='background:#152040; border-radius:99px; height:6px; overflow:hidden;'>"
-                "<div style='width:" + str(conf_bar) + "%; height:100%; border-radius:99px;"
-                " background:" + b_bdr + ";'></div></div>"
+                "<div style='width:" + str(conf_bar) + "%; height:100%; border-radius:99px; background:" + b_bdr + ";'></div></div>"
                 "<div style='text-align:right; margin-top:0.4rem;'>"
                 "<span style='font-family:DM Mono,monospace; font-size:0.7rem; color:" + b_bdr + ";"
                 " background:" + b_bg + "; padding:0.1rem 0.5rem; border-radius:5px;"
@@ -612,7 +520,6 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            # Per-model breakdown hidden inside expander
             with st.expander("🔬 View per-model breakdown & preprocessed text"):
                 active_preds = {k: v for k, v in preds.items() if k in mods_used}
                 n_cols = min(len(active_preds), 2) if active_preds else 1
@@ -620,8 +527,7 @@ with tab1:
                 col_idx = 0
 
                 for model_name in MODEL_META.keys():
-                    if model_name not in active_preds:
-                        continue
+                    if model_name not in active_preds: continue
                     prob = active_preds[model_name]
                     meta = MODEL_META[model_name]
                     mc   = meta['color']
@@ -658,20 +564,17 @@ with tab1:
                             + meta['icon'] + " " + model_name + "</div>"
                             "<div style='font-size:0.67rem; color:#2A3D5A; text-transform:uppercase;"
                             " letter-spacing:0.1em; margin-top:0.12rem; font-family:DM Mono,monospace;'>"
-                            + meta['type'] + "</div>"
-                            "</div>"
+                            + meta['type'] + "</div></div>"
                             "<div style='background:" + v_bg + "; color:" + vc + ";"
                             " border:1px solid " + v_bdr + "; border-radius:6px;"
                             " padding:0.22rem 0.75rem; font-family:Bebas Neue; font-size:1rem;"
-                            " letter-spacing:0.08em;'>" + verdict + "</div>"
-                            "</div>"
+                            " letter-spacing:0.08em;'>" + verdict + "</div></div>"
                             "<div style='background:#152040; border-radius:99px; height:4px;"
                             " overflow:hidden; margin-bottom:0.35rem;'>"
                             "<div style='width:" + str(bar_w) + "%; height:100%; border-radius:99px;"
                             " background:" + vc + ";'></div></div>"
                             "<div style='display:flex; justify-content:space-between;'>"
-                            "<span style='font-size:0.68rem; color:#2A3D5A;"
-                            " font-family:DM Mono,monospace;'>confidence</span>"
+                            "<span style='font-size:0.68rem; color:#2A3D5A; font-family:DM Mono,monospace;'>confidence</span>"
                             "<span style='font-size:0.72rem; color:" + vc + "; font-weight:600;"
                             " font-family:DM Mono,monospace;'>" + str(round(conf_val*100,1)) + "%</span>"
                             "</div></div>",
@@ -680,36 +583,24 @@ with tab1:
 
                 st.code(res['cleaned'][:500] + ('...' if len(res['cleaned']) > 500 else ''), language=None)
 
-
-
 # ════════ TAB 2 — COMPARISON ═════════════════════════════════════════════════
 with tab2:
-
-    # ── FIX 1: EDA Section (NEW) ──────────────────────────────────────────────
     st.markdown(lbl("EDA — Class Distribution & Article Length"), unsafe_allow_html=True)
     eda_c1, eda_c2 = st.columns(2, gap="large")
     with eda_c1:
         p = os.path.join(BASE_DIR, 'charts', 'eda_class_distribution.png')
-        if os.path.exists(p):
-            st.image(p, use_container_width=True)
-        else:
-            st.info("eda_class_distribution.png not found in charts/")
+        if os.path.exists(p): st.image(p, use_container_width=True)
+        else: st.info("eda_class_distribution.png not found in charts/")
     with eda_c2:
         p = os.path.join(BASE_DIR, 'charts', 'eda_length_distribution.png')
-        if os.path.exists(p):
-            st.image(p, use_container_width=True)
-        else:
-            st.info("eda_length_distribution.png not found in charts/")
+        if os.path.exists(p): st.image(p, use_container_width=True)
+        else: st.info("eda_length_distribution.png not found in charts/")
 
     st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
-
-    # ── FIX 2: Corrected label — 8 Datasets × 4 Models (32 Runs) ─────────────
     st.markdown(lbl("Performance Heatmaps — 8 Datasets × 4 Models (32 Runs)"), unsafe_allow_html=True)
     hp = os.path.join(BASE_DIR, 'charts', 'heatmaps_accuracy_f1.png')
-    if os.path.exists(hp):
-        st.image(hp, use_container_width=True)
-    else:
-        st.info("heatmaps_accuracy_f1.png not found in charts/")
+    if os.path.exists(hp): st.image(hp, use_container_width=True)
+    else: st.info("heatmaps_accuracy_f1.png not found in charts/")
 
     cc1, cc2 = st.columns(2, gap="large")
     with cc1:
@@ -739,10 +630,10 @@ with tab3:
 
         m1, m2, m3, m4 = st.columns(4, gap="medium")
         metric_data = [
-            (m1, "Training Runs",  "32",                          "#00FF88"),
-            (m2, "Total Articles", "~275K",                       "#7C3AED"),
-            (m3, "Best Accuracy",  str(round(acc_vals.max()*100, 2)) + "%", "#FFB800"),
-            (m4, "Best F1-Score",  str(round(f1_vals.max()*100, 2)) + "%",  "#00D4FF"),
+            (m1, "Training Runs",  "32",                                        "#00FF88"),
+            (m2, "Total Articles", "~275K",                                     "#7C3AED"),
+            (m3, "Best Accuracy",  str(round(acc_vals.max()*100, 2)) + "%",     "#FFB800"),
+            (m4, "Best F1-Score",  str(round(f1_vals.max()*100, 2)) + "%",      "#00D4FF"),
         ]
         for col, label, val, clr in metric_data:
             with col:
@@ -761,26 +652,13 @@ with tab3:
         st.markdown(lbl("Master Results Table"), unsafe_allow_html=True)
         f1c, f2c = st.columns(2, gap="medium")
         with f1c:
-            ds_filter = st.multiselect(
-                "Filter Dataset",
-                options=df['Dataset'].unique().tolist(),
-                default=df['Dataset'].unique().tolist()
-            )
+            ds_filter = st.multiselect("Filter Dataset", options=df['Dataset'].unique().tolist(), default=df['Dataset'].unique().tolist())
         with f2c:
-            model_filter = st.multiselect(
-                "Filter Model",
-                options=df['Model'].unique().tolist(),
-                default=df['Model'].unique().tolist()
-            )
+            model_filter = st.multiselect("Filter Model", options=df['Model'].unique().tolist(), default=df['Model'].unique().tolist())
 
         filtered = df[df['Dataset'].isin(ds_filter) & df['Model'].isin(model_filter)]
         st.dataframe(filtered, use_container_width=True, hide_index=True)
-        st.download_button(
-            "Download Results CSV",
-            data=df.to_csv(index=False).encode('utf-8'),
-            file_name='veritas_ai_results.csv',
-            mime='text/csv'
-        )
+        st.download_button("Download Results CSV", data=df.to_csv(index=False).encode('utf-8'), file_name='veritas_ai_results.csv', mime='text/csv')
 
         st.markdown(lbl("Key Research Findings"), unsafe_allow_html=True)
         findings = [
@@ -797,11 +675,7 @@ with tab3:
         ]
         for title, body in findings:
             with st.expander(title):
-                st.markdown(
-                    "<div style='color:#6B82A8; font-size:0.88rem; line-height:1.75; padding:0.4rem 0;'>"
-                    + body + "</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown("<div style='color:#6B82A8; font-size:0.88rem; line-height:1.75; padding:0.4rem 0;'>" + body + "</div>", unsafe_allow_html=True)
     else:
         st.warning("master_results.csv not found. Run the Colab notebook first.")
 
@@ -826,8 +700,7 @@ with tab4:
 
         st.markdown(lbl("Datasets"), unsafe_allow_html=True)
         ds_rows = [
-            {'Dataset': ds, 'Period': info['period'],
-             'Articles': info['rows'], 'Source': info['source'], 'Type': info['tag']}
+            {'Dataset': ds, 'Period': info['period'], 'Articles': info['rows'], 'Source': info['source'], 'Type': info['tag']}
             for ds, info in DATASET_INFO.items()
         ]
         st.dataframe(pd.DataFrame(ds_rows), use_container_width=True, hide_index=True)
