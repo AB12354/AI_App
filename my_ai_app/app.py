@@ -17,7 +17,7 @@ import streamlit as st
 
 @st.cache_resource
 def load_models():
-    repo = "https://huggingface.co/abjhbjhe/Fake_news/tree/main"  # ← change this
+    repo = "abjhbjhe/Fake_news"
     
     lr    = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
     lgbm  = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
