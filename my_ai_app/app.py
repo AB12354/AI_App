@@ -15,17 +15,17 @@ import joblib
 import tensorflow as tf
 import streamlit as st
 
+
 @st.cache_resource
 def load_models():
     repo = "abjhbjhe/Fake_news"
     
-    lr    = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
-    lgbm  = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
+    lr     = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
+    lgbm   = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
     bilstm = tf.keras.models.load_model(hf_hub_download(repo, "bilstm_combined.keras"))
-    cnn   = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
+    cnn    = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
     
     return lr, lgbm, bilstm, cnn
-
 lr, lgbm, bilstm, cnn = load_models()
 
 
