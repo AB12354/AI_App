@@ -1,15 +1,15 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
 import re
 import os
+import json
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
-from scipy.sparse import hstack, csr_matrix
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.text import tokenizer_from_json
 from huggingface_hub import hf_hub_download
 import tensorflow as tf
 
@@ -47,10 +47,7 @@ DATASET_INFO = {
 }
 
 MODEL_META = {
-    'Logistic Regression': {'type':'Classical ML',  'icon':'⚡','color':'#00FF88','key':'lr',    'feat':'tfidf','desc':'Fast and interpretable'},
-    'LightGBM':            {'type':'Ensemble ML',   'icon':'🌲','color':'#FFB800','key':'lgb',   'feat':'tfidf','desc':'High-speed gradient boosting'},
-    'BiLSTM':              {'type':'Deep Learning', 'icon':'🧠','color':'#7C3AED','key':'bilstm','feat':'seq',  'desc':'Bidirectional sequence model'},
-    'CNN-Text':            {'type':'Deep Learning', 'icon':'🔬','color':'#FF2D78','key':'cnn',   'feat':'seq',  'desc':'Convolutional text patterns'},
+    'CNN-Text': {'type':'Deep Learning', 'icon':'🔬','color':'#FF2D78','key':'cnn','feat':'seq','desc':'Convolutional text patterns'},
 }
 
 TEAM = [
@@ -84,18 +81,6 @@ def clean_text(text):
     tokens = [stemmer.stem(t) for t in tokens if t not in STOP_WORDS and len(t) > 2]
     return ' '.join(tokens)
 
-def handcrafted_features(texts):
-    feats = []
-    for t in texts:
-        if not isinstance(t, str) or len(t) == 0:
-            feats.append([0,0,0]); continue
-        length = len(t)
-        punct_ratio = sum(1 for c in t if c in '!?') / length
-        words = t.split()
-        unique_ratio = len(set(words)) / len(words) if words else 0
-        feats.append([length, punct_ratio, unique_ratio])
-    return np.array(feats)
-
 # ── Model Loading from HuggingFace ────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_all_models():
@@ -103,66 +88,32 @@ def load_all_models():
     loaded = {}
     errors = []
 
-    # Load tfidf and tokenizer from local models/ folder if available
-    tfidf_model = None
-    tok_model   = None
-    base = os.path.join(BASE_DIR, 'models')
-    if os.path.exists(os.path.join(base, 'tfidf_combined.pkl')):
-        try: tfidf_model = joblib.load(os.path.join(base, 'tfidf_combined.pkl'))
-        except: pass
-    if os.path.exists(os.path.join(base, 'tokenizer_combined.pkl')):
-        try: tok_model = joblib.load(os.path.join(base, 'tokenizer_combined.pkl'))
-        except: pass
-
-    # Load 4 models from HuggingFace
     try:
-        lr_model     = joblib.load(hf_hub_download(repo, "lr_combined.pkl"))
-        lgbm_model   = joblib.load(hf_hub_download(repo, "lgb_combined.pkl"))
-        bilstm_model = tf.keras.models.load_model(hf_hub_download(repo, "bilstm_combined.keras"))
-        cnn_model    = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
+        cnn_model = tf.keras.models.load_model(hf_hub_download(repo, "cnn_combined.keras"))
     except Exception as e:
-        errors.append(str(e))
+        errors.append(f"CNN model: {e}")
         return {ds: {} for ds in DATASETS}, errors
-    # Load tfidf and tokenizer from HuggingFace
-    try:
-        tfidf_model = joblib.load(hf_hub_download(repo, "tfidf_combined.pkl"))
-    except Exception as e:
-        tfidf_model = None
-    
-    try:
-        tok_model = joblib.load(hf_hub_download(repo, "tokenizer_combined.pkl"))
-    except Exception as e:
-        tok_model = None
-    combined = {
-        'lr':     lr_model,
-        'lgb':    lgbm_model,
-        'bilstm': bilstm_model,
-        'cnn':    cnn_model,
-        'tfidf':  tfidf_model,
-        'tok':    tok_model,
-    }
 
-    # All datasets share the same combined models
+    try:
+        tok_path = hf_hub_download(repo, "tokenizer_combined.json")
+        with open(tok_path, "r") as f:
+            tok_model = tokenizer_from_json(json.load(f))
+    except Exception as e:
+        errors.append(f"Tokenizer: {e}")
+        tok_model = None
+
+    combined = {'cnn': cnn_model, 'tok': tok_model}
+
     for ds in DATASETS:
         loaded[ds] = combined
 
     return loaded, errors
 
 # ── Prediction ────────────────────────────────────────────────────────────────
-def predict_dataset(text, ds, models, selected_models=None):
-    if selected_models is None:
-        selected_models = list(MODEL_META.keys())
+def predict_dataset(text, ds, models):
     m = models.get(ds, {})
     cleaned = clean_text(text)
     preds = {}
-
-    tfidf_input = None
-    if m.get('tfidf'):
-        try:
-            tfidf_feat  = m['tfidf'].transform([cleaned])
-            hc_feat     = csr_matrix(handcrafted_features([cleaned]))
-            tfidf_input = hstack([tfidf_feat, hc_feat])
-        except: pass
 
     seq_input = None
     if m.get('tok'):
@@ -173,22 +124,14 @@ def predict_dataset(text, ds, models, selected_models=None):
             )
         except: pass
 
-    model_map = [
-        ('Logistic Regression', 'lr',     tfidf_input),
-        ('LightGBM',            'lgb',    tfidf_input),
-        ('BiLSTM',              'bilstm', seq_input),
-        ('CNN-Text',            'cnn',    seq_input),
-    ]
-    for name, key, inp in model_map:
-        if name not in selected_models: continue
-        if m.get(key) and inp is not None:
-            try:
-                if key in ['lr', 'lgb']:
-                    preds[name] = float(m[key].predict_proba(inp)[0][1])
-                else:
-                    preds[name] = float(m[key].predict(inp, verbose=0).flatten()[0])
-            except: preds[name] = None
-        else: preds[name] = None
+    if m.get('cnn') and seq_input is not None:
+        try:
+            preds['CNN-Text'] = float(m['cnn'].predict(seq_input, verbose=0).flatten()[0])
+        except:
+            preds['CNN-Text'] = None
+    else:
+        preds['CNN-Text'] = None
+
     return preds, cleaned
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -233,7 +176,6 @@ section[data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem !import
 .stButton:nth-of-type(1) > button:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 30px rgba(0,255,136,0.45) !important; }
 .stButton:nth-of-type(2) > button { background: var(--surface2) !important; color: var(--text2) !important; border: 1px solid var(--border2) !important; }
 .stButton:nth-of-type(2) > button:hover { border-color: var(--neon2) !important; color: var(--neon2) !important; }
-.stButton:nth-of-type(3) > button { background: rgba(124,58,237,0.1) !important; color: #A78BFA !important; border: 1px solid rgba(124,58,237,0.3) !important; }
 .stSelectbox > div > div { background: var(--surface2) !important; border: 1px solid var(--border2) !important; border-radius: 9px !important; color: var(--text) !important; font-family: var(--font-b) !important; }
 .stMultiSelect > div { background: var(--surface2) !important; border: 1px solid var(--border2) !important; border-radius: 9px !important; }
 .stMultiSelect span[data-baseweb="tag"] { background: rgba(0,255,136,0.1) !important; border: 1px solid rgba(0,255,136,0.3) !important; border-radius: 6px !important; color: var(--neon) !important; }
@@ -258,10 +200,9 @@ code { font-family: var(--font-m) !important; color: var(--neon) !important; }
 with st.spinner('Initializing VeritasAI...'):
     all_models, load_errors = load_all_models()
 
-total_loaded = sum(
-    1 for ds in DATASETS for k in ['lr','lgb','bilstm','cnn']
-    if all_models.get(ds, {}).get(k) is not None
-)
+cnn_loaded = all_models.get('Combined', {}).get('cnn') is not None
+tok_loaded  = all_models.get('Combined', {}).get('tok') is not None
+total_loaded = 8 if cnn_loaded else 0  # 1 model × 8 datasets
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
@@ -278,18 +219,20 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    sc = "#00FF88" if total_loaded > 20 else ("#FFB800" if total_loaded > 10 else "#FF2D78")
+    sc = "#00FF88" if cnn_loaded and tok_loaded else "#FF2D78"
     st.markdown(
         "<div style='background:#0A1020; border:1px solid #1A2840; border-radius:11px;"
         " padding:1rem 1.1rem; margin-bottom:1.1rem;'>"
         "<div style='font-size:0.65rem; color:#2A3D5A; text-transform:uppercase;"
         " letter-spacing:0.12em; margin-bottom:0.7rem; font-family:DM Mono,monospace;'>System Status</div>"
         "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:0.45rem;'>"
-        "<span style='color:#6B82A8; font-size:0.8rem;'>Models loaded</span>"
-        "<span style='font-family:Bebas Neue; font-size:1.2rem; letter-spacing:0.1em; color:" + sc + ";'>" + str(total_loaded) + "/32</span></div>"
+        "<span style='color:#6B82A8; font-size:0.8rem;'>CNN Model</span>"
+        "<span style='font-family:Bebas Neue; font-size:1.2rem; letter-spacing:0.1em; color:" + sc + ";'>"
+        + ("✓ LOADED" if cnn_loaded else "✗ FAILED") + "</span></div>"
         "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:0.45rem;'>"
-        "<span style='color:#6B82A8; font-size:0.8rem;'>Datasets</span>"
-        "<span style='font-family:Bebas Neue; font-size:1.2rem; letter-spacing:0.1em; color:#7C3AED;'>8</span></div>"
+        "<span style='color:#6B82A8; font-size:0.8rem;'>Tokenizer</span>"
+        "<span style='font-family:Bebas Neue; font-size:1.2rem; letter-spacing:0.1em; color:" + sc + ";'>"
+        + ("✓ LOADED" if tok_loaded else "✗ FAILED") + "</span></div>"
         "<div style='display:flex; justify-content:space-between; align-items:center;'>"
         "<span style='color:#6B82A8; font-size:0.8rem;'>Training runs</span>"
         "<span style='font-family:Bebas Neue; font-size:1.2rem; letter-spacing:0.1em; color:#FFB800;'>32</span></div>"
@@ -297,24 +240,23 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-    st.markdown(lbl("Available Models"), unsafe_allow_html=True)
-    for mname, meta in MODEL_META.items():
-        ds_count = sum(1 for ds in DATASETS if all_models.get(ds, {}).get(meta['key']) is not None)
-        mc = meta['color']
-        st.markdown(
-            "<div style='display:flex; align-items:center; gap:0.7rem; padding:0.5rem 0.8rem;"
-            " background:#0A1020; border:1px solid #1A2840; border-radius:8px;"
-            " margin-bottom:0.35rem; border-left:2px solid " + mc + ";'>"
-            "<span style='font-size:1rem;'>" + meta['icon'] + "</span>"
-            "<div style='flex:1;'>"
-            "<div style='font-size:0.8rem; font-weight:600; color:#F0F6FF;'>" + mname + "</div>"
-            "<div style='font-size:0.67rem; color:#2A3D5A;'>" + meta['type'] + " · " + meta['desc'] + "</div>"
-            "</div>"
-            "<div style='font-family:DM Mono; font-size:0.65rem; color:" + mc + "; background:rgba(0,0,0,0.3);"
-            " padding:0.1rem 0.4rem; border-radius:4px; border:1px solid " + mc + "33;'>" + str(ds_count) + "/8</div>"
-            "</div>",
-            unsafe_allow_html=True
-        )
+    st.markdown(lbl("Active Model"), unsafe_allow_html=True)
+    meta = MODEL_META['CNN-Text']
+    mc = meta['color']
+    st.markdown(
+        "<div style='display:flex; align-items:center; gap:0.7rem; padding:0.5rem 0.8rem;"
+        " background:#0A1020; border:1px solid #1A2840; border-radius:8px;"
+        " margin-bottom:0.35rem; border-left:2px solid " + mc + ";'>"
+        "<span style='font-size:1rem;'>" + meta['icon'] + "</span>"
+        "<div style='flex:1;'>"
+        "<div style='font-size:0.8rem; font-weight:600; color:#F0F6FF;'>CNN-Text</div>"
+        "<div style='font-size:0.67rem; color:#2A3D5A;'>" + meta['type'] + " · " + meta['desc'] + "</div>"
+        "</div>"
+        "<div style='font-family:DM Mono; font-size:0.65rem; color:" + mc + "; background:rgba(0,0,0,0.3);"
+        " padding:0.1rem 0.4rem; border-radius:4px; border:1px solid " + mc + "33;'>8/8</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
 
     st.markdown(
         "<div style='margin-top:1.2rem; padding-top:1rem; border-top:1px solid #1A2840;'>"
@@ -340,11 +282,11 @@ st.markdown(
     " line-height:1; margin-bottom:0.35rem;'>VERITAS AI</div>"
     "<div style='color:#3A5070; font-size:0.82rem; letter-spacing:0.08em;"
     " text-transform:uppercase; font-family:DM Mono,monospace;'>"
-    "Cross-Dataset Multi-Model Fake News Intelligence</div>"
+    "Cross-Dataset CNN-Text Fake News Intelligence</div>"
     "<div style='display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;'>"
-    "<span style='background:rgba(0,255,136,0.08); border:1px solid rgba(0,255,136,0.2);"
-    " color:#00FF88; font-size:0.68rem; padding:0.18rem 0.6rem; border-radius:20px;"
-    " font-family:DM Mono,monospace;'>4 MODELS</span>"
+    "<span style='background:rgba(255,45,120,0.08); border:1px solid rgba(255,45,120,0.2);"
+    " color:#FF2D78; font-size:0.68rem; padding:0.18rem 0.6rem; border-radius:20px;"
+    " font-family:DM Mono,monospace;'>CNN-TEXT</span>"
     "<span style='background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.2);"
     " color:#A78BFA; font-size:0.68rem; padding:0.18rem 0.6rem; border-radius:20px;"
     " font-family:DM Mono,monospace;'>8 DATASETS</span>"
@@ -354,13 +296,13 @@ st.markdown(
     "</div></div>"
     "<div style='display:flex; gap:2rem; flex-wrap:wrap;'>"
     "<div style='text-align:center;'>"
-    "<div style='font-family:Bebas Neue; font-size:2.2rem; letter-spacing:0.1em; color:#00FF88;'>32</div>"
+    "<div style='font-family:Bebas Neue; font-size:2.2rem; letter-spacing:0.1em; color:#FF2D78;'>CNN</div>"
+    "<div style='font-size:0.62rem; color:#2A3D5A; text-transform:uppercase;"
+    " letter-spacing:0.1em; font-family:DM Mono,monospace;'>Architecture</div></div>"
+    "<div style='text-align:center;'>"
+    "<div style='font-family:Bebas Neue; font-size:2.2rem; letter-spacing:0.1em; color:#7C3AED;'>32</div>"
     "<div style='font-size:0.62rem; color:#2A3D5A; text-transform:uppercase;"
     " letter-spacing:0.1em; font-family:DM Mono,monospace;'>Training Runs</div></div>"
-    "<div style='text-align:center;'>"
-    "<div style='font-family:Bebas Neue; font-size:2.2rem; letter-spacing:0.1em; color:#7C3AED;'>4</div>"
-    "<div style='font-size:0.62rem; color:#2A3D5A; text-transform:uppercase;"
-    " letter-spacing:0.1em; font-family:DM Mono,monospace;'>AI Models</div></div>"
     "<div style='text-align:center;'>"
     "<div style='font-family:Bebas Neue; font-size:2.2rem; letter-spacing:0.1em; color:#FFB800;'>8</div>"
     "<div style='font-size:0.62rem; color:#2A3D5A; text-transform:uppercase;"
@@ -381,21 +323,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # ════════ TAB 1 — ANALYZE ════════════════════════════════════════════════════
 with tab1:
-    selected_ds     = 'Combined'
-    selected_models = list(MODEL_META.keys())
-
-    # Check if tfidf/tokenizer are available
-    has_tfidf = all_models.get('Combined', {}).get('tfidf') is not None
-    has_tok   = all_models.get('Combined', {}).get('tok') is not None
-
-    if not has_tfidf or not has_tok:
-        st.warning(
-            "⚠️ TF-IDF vectorizer and/or tokenizer not found. "
-            "Logistic Regression and LightGBM require tfidf_combined.pkl; "
-            "BiLSTM and CNN-Text require tokenizer_combined.pkl. "
-            "Please upload these to your Hugging Face repo or models/ folder.",
-            icon=None
-        )
+    selected_ds = 'Combined'
 
     st.markdown(lbl("Quick Examples"), unsafe_allow_html=True)
     example_choice = st.selectbox(
@@ -425,22 +353,16 @@ with tab1:
     if example_choice in EXAMPLES:
         st.session_state['article_text'] = EXAMPLES[example_choice]
 
-    badges = ""
-    for m in MODEL_META:
-        mc  = MODEL_META[m]['color']
-        ico = MODEL_META[m]['icon']
-        badges += (
-            "<span style='background:rgba(0,0,0,0.3); border:1px solid #1A2840;"
-            " border-radius:6px; padding:0.15rem 0.55rem; font-size:0.72rem; color:" + mc + ";"
-            " margin-right:0.3rem; font-family:DM Mono,monospace;'>" + ico + " " + m + "</span>"
-        )
     st.markdown(
         "<div style='background:#060C1A; border:1px solid #1A2840; border-radius:9px;"
         " padding:0.55rem 0.9rem; margin:0.4rem 0 0.6rem; display:flex;"
         " align-items:center; gap:0.6rem; flex-wrap:wrap;'>"
         "<span style='font-size:0.68rem; color:#2A3D5A; font-family:DM Mono,monospace;"
         " text-transform:uppercase; letter-spacing:0.1em; white-space:nowrap;'>Running on Combined dataset:</span>"
-        + badges + "</div>",
+        "<span style='background:rgba(0,0,0,0.3); border:1px solid #1A2840;"
+        " border-radius:6px; padding:0.15rem 0.55rem; font-size:0.72rem; color:#FF2D78;"
+        " font-family:DM Mono,monospace;'>🔬 CNN-Text</span>"
+        "</div>",
         unsafe_allow_html=True
     )
 
@@ -455,7 +377,7 @@ with tab1:
 
     b1, b2 = st.columns([3,1], gap="small")
     with b1:
-        analyze_btn = st.button("🔍  Analyze with 4 Models", use_container_width=True)
+        analyze_btn = st.button("🔍  Analyze with CNN-Text", use_container_width=True)
     with b2:
         clear_btn = st.button("✕  Clear", use_container_width=True)
 
@@ -466,41 +388,29 @@ with tab1:
 
     if analyze_btn and article and article.strip():
         st.session_state['article_text'] = article
-        with st.spinner("Running 4 models on Combined dataset..."):
-            preds, cleaned = predict_dataset(article.strip(), selected_ds, all_models, selected_models)
+        with st.spinner("Running CNN-Text on Combined dataset..."):
+            preds, cleaned = predict_dataset(article.strip(), selected_ds, all_models)
         st.session_state['analysis_results'] = {
-            'preds': preds, 'cleaned': cleaned,
-            'dataset': selected_ds, 'models_used': selected_models
+            'preds': preds, 'cleaned': cleaned, 'dataset': selected_ds
         }
     elif analyze_btn and not (article and article.strip()):
         st.warning("Please paste an article first.")
 
     if 'analysis_results' in st.session_state:
-        res       = st.session_state['analysis_results']
-        preds     = res['preds']
-        ds_used   = res['dataset']
-        mods_used = res.get('models_used', list(MODEL_META.keys()))
+        res     = st.session_state['analysis_results']
+        preds   = res['preds']
+        ds_used = res['dataset']
 
         st.markdown("<div style='height:0.7rem;'></div>", unsafe_allow_html=True)
-        valid_preds = {k: v for k, v in preds.items() if v is not None}
 
-        if not valid_preds:
-            st.warning("No model produced a result. Make sure tfidf_combined.pkl and tokenizer_combined.pkl are uploaded to your Hugging Face repo.")
+        prob = preds.get('CNN-Text')
+        if prob is None:
+            st.warning("CNN-Text model did not produce a result. Check that cnn_combined.keras and tokenizer_combined.json are uploaded to your Hugging Face repo.")
         else:
-            avg_prob    = np.mean(list(valid_preds.values()))
-            fake_votes  = sum(1 for p in valid_preds.values() if p >= 0.5)
-            total_votes = len(valid_preds)
-
-            if fake_votes >= 3 and avg_prob >= 0.60:
-                consensus = 'FAKE'; conf = avg_prob
-            elif fake_votes <= 1 or avg_prob <= 0.40:
-                consensus = 'REAL'; conf = 1 - avg_prob
-            else:
-                consensus = 'UNCERTAIN'; conf = max(avg_prob, 1 - avg_prob)
-
-            b_bg  = ('rgba(255,45,120,0.08)'  if consensus == 'FAKE' else 'rgba(0,255,136,0.08)' if consensus == 'REAL' else 'rgba(255,184,0,0.08)')
-            b_bdr = ('#FF2D78' if consensus == 'FAKE' else '#00FF88' if consensus == 'REAL' else '#FFB800')
-            b_ico = ('FAKE NEWS' if consensus == 'FAKE' else 'REAL NEWS' if consensus == 'REAL' else 'UNCERTAIN')
+            verdict  = 'FAKE' if prob >= 0.5 else 'REAL'
+            conf     = prob if prob >= 0.5 else 1 - prob
+            b_bg     = 'rgba(255,45,120,0.08)' if verdict == 'FAKE' else 'rgba(0,255,136,0.08)'
+            b_bdr    = '#FF2D78' if verdict == 'FAKE' else '#00FF88'
             conf_bar = int(conf * 100)
 
             st.markdown(
@@ -509,12 +419,10 @@ with tab1:
                 " display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;'>"
                 "<div>"
                 "<div style='font-family:Bebas Neue,sans-serif; font-size:2.6rem; color:" + b_bdr + ";"
-                " letter-spacing:0.12em; line-height:1;'>" + b_ico + "</div>"
+                " letter-spacing:0.12em; line-height:1;'>" + verdict + " NEWS</div>"
                 "<div style='color:#3A5070; font-size:0.79rem; margin-top:0.35rem; font-family:DM Mono,monospace;'>"
-                + str(fake_votes) + "/" + str(total_votes) + " models say FAKE · "
-                + str(round(conf*100, 1)) + "% confidence"
-                + (" · models disagree, treat with caution" if consensus == 'UNCERTAIN' else "")
-                + "</div></div>"
+                "CNN-Text · " + str(round(conf*100, 1)) + "% confidence · Combined dataset"
+                "</div></div>"
                 "<div style='min-width:160px;'>"
                 "<div style='display:flex; justify-content:space-between; margin-bottom:0.35rem;'>"
                 "<span style='font-size:0.68rem; color:#2A3D5A; font-family:DM Mono,monospace; text-transform:uppercase;'>Confidence</span>"
@@ -529,67 +437,7 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            with st.expander("🔬 View per-model breakdown & preprocessed text"):
-                active_preds = {k: v for k, v in preds.items() if k in mods_used}
-                n_cols = min(len(active_preds), 2) if active_preds else 1
-                result_cols = st.columns(n_cols, gap="medium")
-                col_idx = 0
-
-                for model_name in MODEL_META.keys():
-                    if model_name not in active_preds: continue
-                    prob = active_preds[model_name]
-                    meta = MODEL_META[model_name]
-                    mc   = meta['color']
-                    col  = result_cols[col_idx % n_cols]
-                    col_idx += 1
-
-                    if prob is None:
-                        with col:
-                            st.markdown(
-                                "<div style='background:#0A1020; border:1px solid #1A2840;"
-                                " border-radius:11px; padding:0.9rem 1.1rem; margin-bottom:0.55rem; opacity:0.35;'>"
-                                "<div style='font-size:0.8rem; color:#2A3D5A;'>"
-                                + meta['icon'] + " " + model_name + " — not available</div></div>",
-                                unsafe_allow_html=True
-                            )
-                        continue
-
-                    verdict  = 'FAKE' if prob >= 0.5 else 'REAL'
-                    conf_val = prob if prob >= 0.5 else 1 - prob
-                    vc       = '#FF2D78' if verdict == 'FAKE' else '#00FF88'
-                    bar_w    = int(conf_val * 100)
-                    v_bg     = 'rgba(255,45,120,0.1)' if verdict == 'FAKE' else 'rgba(0,255,136,0.1)'
-                    v_bdr    = 'rgba(255,45,120,0.25)' if verdict == 'FAKE' else 'rgba(0,255,136,0.25)'
-
-                    with col:
-                        st.markdown(
-                            "<div style='background:#0A1020; border:1px solid #1A2840;"
-                            " border-radius:11px; padding:1rem 1.15rem; margin-bottom:0.55rem;"
-                            " border-left:2.5px solid " + mc + ";'>"
-                            "<div style='display:flex; justify-content:space-between;"
-                            " align-items:flex-start; margin-bottom:0.65rem;'>"
-                            "<div>"
-                            "<div style='font-size:0.88rem; font-weight:600; color:#F0F6FF;'>"
-                            + meta['icon'] + " " + model_name + "</div>"
-                            "<div style='font-size:0.67rem; color:#2A3D5A; text-transform:uppercase;"
-                            " letter-spacing:0.1em; margin-top:0.12rem; font-family:DM Mono,monospace;'>"
-                            + meta['type'] + "</div></div>"
-                            "<div style='background:" + v_bg + "; color:" + vc + ";"
-                            " border:1px solid " + v_bdr + "; border-radius:6px;"
-                            " padding:0.22rem 0.75rem; font-family:Bebas Neue; font-size:1rem;"
-                            " letter-spacing:0.08em;'>" + verdict + "</div></div>"
-                            "<div style='background:#152040; border-radius:99px; height:4px;"
-                            " overflow:hidden; margin-bottom:0.35rem;'>"
-                            "<div style='width:" + str(bar_w) + "%; height:100%; border-radius:99px;"
-                            " background:" + vc + ";'></div></div>"
-                            "<div style='display:flex; justify-content:space-between;'>"
-                            "<span style='font-size:0.68rem; color:#2A3D5A; font-family:DM Mono,monospace;'>confidence</span>"
-                            "<span style='font-size:0.72rem; color:" + vc + "; font-weight:600;"
-                            " font-family:DM Mono,monospace;'>" + str(round(conf_val*100,1)) + "%</span>"
-                            "</div></div>",
-                            unsafe_allow_html=True
-                        )
-
+            with st.expander("🔬 View preprocessed text"):
                 st.code(res['cleaned'][:500] + ('...' if len(res['cleaned']) > 500 else ''), language=None)
 
 # ════════ TAB 2 — COMPARISON ═════════════════════════════════════════════════
@@ -717,7 +565,6 @@ with tab4:
         st.markdown(lbl("Tech Stack"), unsafe_allow_html=True)
         techs = [
             ("Python 3.10","#00FF88"), ("TensorFlow/Keras","#FF2D78"),
-            ("scikit-learn","#FFB800"), ("LightGBM","#00FF88"),
             ("NLTK","#7C3AED"),        ("pandas","#00FF88"),
             ("NumPy","#00D4FF"),       ("Streamlit","#FF2D78"),
             ("Google Colab","#FFB800"),("HuggingFace","#7C3AED"),
